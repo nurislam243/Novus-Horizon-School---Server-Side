@@ -8,4 +8,7 @@ router.post('/add-student', studentController.createStudent);
 // fetches all student records
 router.get('/all-students', studentController.getAllStudents);
 
+// delete a student record
+router.delete('/delete-student/:id', studentController.deleteStudent);
+
 module.exports = router;
