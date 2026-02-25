@@ -11,4 +11,7 @@ router.get('/all-students', studentController.getAllStudents);
 // delete a student record
 router.delete('/delete-student/:id', studentController.deleteStudent);
 
+// update a student record
+router.patch('/update-student/:id', studentController.updateStudent);
+
 module.exports = router;
