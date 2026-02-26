@@ -14,4 +14,7 @@ router.get('/teacher/:id', teacherController.getTeacherById);
 // Update teacher details
 router.patch('/update-teacher/:id', teacherController.updateTeacher);
 
+// Delete teacher
+router.delete('/delete-teacher/:id', teacherController.deleteTeacher);
+
 module.exports = router;

@@ -89,3 +89,28 @@ exports.updateTeacher = async (req, res) => {
         });
     }
 };
+
+
+// Delete teacher profile
+exports.deleteTeacher = async (req, res) => {
+    try {
+        const teacher = await Teacher.findByIdAndDelete(req.params.id);
+
+        if (!teacher) {
+            return res.status(404).json({
+                success: false,
+                message: "Teacher not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Teacher profile deleted successfully"
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
