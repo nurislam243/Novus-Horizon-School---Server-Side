@@ -17,7 +17,7 @@ app.use(express.json());
 // Main Routes
 app.use('/api', studentRoutes);
 app.use('/api', teacherRoutes);
-app.use('/api', resultRoutes)
+app.use('/api', resultRoutes);
 
 app.get('/', (req, res) => {
     res.send('Novus Horizon Server is Ready');

@@ -95,3 +95,44 @@ exports.addBulkResults = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+
+// Get results with dynamic filtering and sorting
+exports.getResult = async (req, res) => {
+    try {
+        const { className, examName, academicYear, studentId, sortBy } = req.query;
+
+        // Set search criteria
+        let filter = { class: className, examName, academicYear };
+        if (studentId) filter.student = studentId;
+
+        // Determine sorting order (Marks, GPA, or Roll)
+        let sortCriteria = {};
+        if (sortBy === 'marks') {
+            sortCriteria = { totalObtainedMarks: -1 }; 
+        } else if (sortBy === 'gpa') {
+            sortCriteria = { gpa: -1 }; 
+        } else {
+            sortCriteria = { 'student.rollNumber': 1 }; 
+        }
+
+        // Fetch results and populate student data
+        const results = await Result.find(filter)
+            .populate('student', 'firstName lastName rollNumber class section')
+            .sort(sortCriteria);
+
+        if (!results || results.length === 0) {
+            return res.status(404).json({ success: false, message: "No results found" });
+        }
+
+        // Return object for single student, array for class
+        res.status(200).json({ 
+            success: true, 
+            count: results.length,
+            data: studentId ? results[0] : results 
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
