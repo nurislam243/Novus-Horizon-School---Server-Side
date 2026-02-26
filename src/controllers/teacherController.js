@@ -36,3 +36,56 @@ exports.getAllTeachers = async (req, res) => {
         });
     }
 };
+
+// Get a single teacher by ID
+exports.getTeacherById = async (req, res) => {
+    try {
+        const teacher = await Teacher.findById(req.params.id);
+        
+        if (!teacher) {
+            return res.status(404).json({
+                success: false,
+                message: "Teacher not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: teacher
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Update teacher profile
+exports.updateTeacher = async (req, res) => {
+    try {
+        const updatedTeacher = await Teacher.findByIdAndUpdate(
+            req.params.id, 
+            req.body, 
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedTeacher) {
+            return res.status(404).json({
+                success: false,
+                message: "Teacher not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Teacher updated successfully",
+            data: updatedTeacher
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
