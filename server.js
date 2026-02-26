@@ -4,6 +4,7 @@ const cors = require('cors');
 const connectDB = require('./src/config/db');
 const studentRoutes = require('./src/routes/studentRoutes');
 const teacherRoutes = require('./src/routes/teacherRoutes');
+const resultRoutes = require('./src/routes/resultRoutes');
 
 dotenv.config();
 
@@ -16,6 +17,7 @@ app.use(express.json());
 // Main Routes
 app.use('/api', studentRoutes);
 app.use('/api', teacherRoutes);
+app.use('/api', resultRoutes)
 
 app.get('/', (req, res) => {
     res.send('Novus Horizon Server is Ready');
