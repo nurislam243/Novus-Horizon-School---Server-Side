@@ -8,6 +8,7 @@ exports.addBulkResults = async (req, res) => {
         allResults.forEach(entry => {
             let hasAtLeastOneInput = false;
             let totalObtained = 0;
+            let totalPoints = 0;
             let failCount = 0;
             let tempSubjects = [];
 
@@ -24,12 +25,16 @@ exports.addBulkResults = async (req, res) => {
                     let point = 0;
                     const percentage = (obtained / config.fullMarks) * 100;
 
-                    // Grading logic
+                    // Grading Logic
                     if (percentage >= 80) { grade = 'A+'; point = 5; }
                     else if (percentage >= 70) { grade = 'A'; point = 4; }
                     else if (percentage >= 60) { grade = 'A-'; point = 3.5; }
+                    else if (percentage >= 50) { grade = 'B'; point = 3; }
+                    else if (percentage >= 40) { grade = 'C'; point = 2; }
                     else if (percentage >= 33) { grade = 'D'; point = 1; }
-                    else { failCount++; } 
+                    else { failCount++; }
+
+                    totalPoints += point;
 
                     tempSubjects.push({
                         subjectName: config.name,
@@ -53,6 +58,9 @@ exports.addBulkResults = async (req, res) => {
                 }
             });
 
+            // Average Point (GPA) Calculation
+            let gpa = failCount > 0 ? 0 : (totalPoints / subjectsConfig.length).toFixed(2);
+
             let finalStatus = 'Fail';
             let finalSubjects = tempSubjects;
 
@@ -71,6 +79,7 @@ exports.addBulkResults = async (req, res) => {
                 academicYear,
                 subjects: finalSubjects,
                 totalObtainedMarks: totalObtained,
+                gpa: Number(gpa),
                 status: finalStatus
             });
         });

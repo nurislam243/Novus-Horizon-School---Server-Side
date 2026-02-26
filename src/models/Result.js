@@ -34,6 +34,7 @@ const resultSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    gpa: { type: Number, default: 0 },
     status: {
         type: String,
         enum: ['Pass', 'Fail', 'Absent'],
