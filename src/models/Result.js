@@ -46,6 +46,6 @@ const resultSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-resultSchema.index({ student: 1, examName: 1, academicYear: 1 });
+resultSchema.index({ student: 1, examName: 1, academicYear: 1, class: 1 }, { unique: true });
 
 module.exports = mongoose.model('Result', resultSchema);

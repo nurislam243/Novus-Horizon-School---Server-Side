@@ -90,41 +90,6 @@ exports.addBulkResults = async (req, res) => {
     }
 };
 
-// Update a single student's result
-exports.updateSingleResult = async (req, res) => {
-    try {
-        const { resultId, subjects, subjectsConfig } = req.body;
-
-        // calculate result
-        const calculated = calculateFinalResult(subjects, subjectsConfig);
-
-        // Update the document in database
-        const updatedResult = await Result.findByIdAndUpdate(
-            resultId,
-            { 
-                subjects: calculated.subjects,
-                totalObtainedMarks: calculated.totalObtainedMarks,
-                gpa: calculated.gpa,
-                status: calculated.status
-            },
-            { new: true, runValidators: true } 
-        ).populate('student', 'name roll studentId');
-
-        if (!updatedResult) {
-            return res.status(404).json({ success: false, message: "Result not found" });
-        }
-
-        res.status(200).json({ 
-            success: true, 
-            message: "Result updated successfully", 
-            data: updatedResult 
-        });
-
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
 // Get results with dynamic filtering and sorting
 exports.getResult = async (req, res) => {
     try {
@@ -175,7 +140,86 @@ exports.getResult = async (req, res) => {
     }
 };
 
+// Update a single student's result
+exports.updateSingleResult = async (req, res) => {
+    try {
+        const { resultId, subjects, subjectsConfig } = req.body;
 
+        // calculate result
+        const calculated = calculateFinalResult(subjects, subjectsConfig);
+
+        // Update the document in database
+        const updatedResult = await Result.findByIdAndUpdate(
+            resultId,
+            { 
+                subjects: calculated.subjects,
+                totalObtainedMarks: calculated.totalObtainedMarks,
+                gpa: calculated.gpa,
+                status: calculated.status
+            },
+            { new: true, runValidators: true } 
+        ).populate('student', 'name roll studentId');
+
+        if (!updatedResult) {
+            return res.status(404).json({ success: false, message: "Result not found" });
+        }
+
+        res.status(200).json({ 
+            success: true, 
+            message: "Result updated successfully", 
+            data: updatedResult 
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Update bulk results
+exports.updateBulkResults = async (req, res) => {
+    try {
+        const { examName, className, academicYear, allResults, subjectsConfig } = req.body;
+
+        const bulkOps = allResults.map(entry => {
+
+            // calculate results for each student
+            const calculated = calculateFinalResult(entry.subjects, subjectsConfig);
+            
+            return {
+                updateOne: {
+                    filter: { 
+                        student: entry.studentOid, 
+                        examName, 
+                        class: className, 
+                        academicYear 
+                    },
+                    update: { 
+                        $set: { 
+                            ...calculated,
+                            student: entry.studentOid,
+                            examName,
+                            class: className,
+                            academicYear
+                        }
+                    },
+                    upsert: true 
+                }
+            };
+        });
+
+        await Result.bulkWrite(bulkOps);
+
+        res.status(200).json({ 
+            success: true, 
+            message: "Class results updated successfully" 
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// downloadPDF result
 exports.downloadPDF = async (req, res) => {
     try {
         const { className, examName, academicYear, studentId } = req.query;
