@@ -219,6 +219,41 @@ exports.updateBulkResults = async (req, res) => {
     }
 };
 
+// Delete all results for a specific class, exam, and academic year
+exports.deleteClassResults = async (req, res) => {
+    try {
+        const { className, examName, academicYear } = req.body;
+
+        if (!className || !examName || !academicYear) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Please provide className, examName, and academicYear" 
+            });
+        }
+
+        const result = await Result.deleteMany({
+            class: className,
+            examName: examName,
+            academicYear: academicYear
+        });
+
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: "No results found to delete for this criteria" 
+            });
+        }
+
+        res.status(200).json({ 
+            success: true, 
+            message: `Successfully deleted ${result.deletedCount} results for class ${className}` 
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // downloadPDF result
 exports.downloadPDF = async (req, res) => {
     try {

@@ -8,5 +8,6 @@ router.get('/download-pdf', resultController.downloadPDF);
 router.post('/add-bulk', resultController.addBulkResults);
 router.put('/update-result', resultController.updateSingleResult);
 router.put('/update-bulk', resultController.updateBulkResults);
+router.delete('/delete-class-results', resultController.deleteClassResults);
 
 module.exports = router;
