@@ -90,6 +90,40 @@ exports.addBulkResults = async (req, res) => {
     }
 };
 
+// Update a single student's result
+exports.updateSingleResult = async (req, res) => {
+    try {
+        const { resultId, subjects, subjectsConfig } = req.body;
+
+        // calculate result
+        const calculated = calculateFinalResult(subjects, subjectsConfig);
+
+        // Update the document in database
+        const updatedResult = await Result.findByIdAndUpdate(
+            resultId,
+            { 
+                subjects: calculated.subjects,
+                totalObtainedMarks: calculated.totalObtainedMarks,
+                gpa: calculated.gpa,
+                status: calculated.status
+            },
+            { new: true, runValidators: true } 
+        ).populate('student', 'name roll studentId');
+
+        if (!updatedResult) {
+            return res.status(404).json({ success: false, message: "Result not found" });
+        }
+
+        res.status(200).json({ 
+            success: true, 
+            message: "Result updated successfully", 
+            data: updatedResult 
+        });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 
 // Get results with dynamic filtering and sorting
 exports.getResult = async (req, res) => {
