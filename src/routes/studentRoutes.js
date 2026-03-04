@@ -8,6 +8,9 @@ router.post('/add-student', studentController.createStudent);
 // fetches all student records
 router.get('/all-students', studentController.getAllStudents);
 
+// download pdf for students
+router.get('/download-student-pdf', studentController.downloadStudentPDF);
+
 // delete a student record
 router.delete('/delete-student/:id', studentController.deleteStudent);
 

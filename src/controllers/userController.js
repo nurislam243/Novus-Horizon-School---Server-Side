@@ -5,7 +5,7 @@ const Student = require('../models/Student');
 const getUserRole = async (req, res) => {
     try {
         const email = req.params.email;
-
+        
         const isAdmin = await Admin.findOne({ email });
         if (isAdmin) return res.status(200).json({ role: 'admin' });
 

@@ -9,8 +9,7 @@ const studentSchema = new mongoose.Schema({
     },
     roll: { 
         type: Number, 
-        required: [true, "Roll number is required"], 
-        unique: true 
+        required: [true, "Roll number is required"],  
     },
     studentId: { 
         type: String, 
@@ -23,7 +22,6 @@ const studentSchema = new mongoose.Schema({
     },
     section: { 
         type: String, 
-        default: "A" 
     },
 
     // Personal Details
