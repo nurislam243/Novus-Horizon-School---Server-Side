@@ -1,299 +1,333 @@
-const Result = require('../models/Result');
-const Student = require('../models/Student');
-const html_to_pdf = require('html-pdf-node');
+const Result = require("../models/Result");
+const Student = require("../models/Student");
+const html_to_pdf = require("html-pdf-node");
 
 const calculateFinalResult = (inputSubjects, subjectsConfig) => {
-    let hasAtLeastOneInput = false;
-    let totalObtained = 0;
-    let totalPoints = 0;
-    let failCount = 0;
-    let tempSubjects = [];
+  let hasAtLeastOneInput = false;
+  let totalObtained = 0;
+  let totalPoints = 0;
+  let failCount = 0;
+  let tempSubjects = [];
 
-    subjectsConfig.forEach(config => {
-        const inputSubject = inputSubjects.find(s => s.subjectName === config.name);
-        
-        // Process marks if provided
-        if (inputSubject && (inputSubject.obtainedMarks !== '' && inputSubject.obtainedMarks !== null)) {
-            hasAtLeastOneInput = true;
-            let obtained = Number(inputSubject.obtainedMarks);
-            totalObtained += obtained;
-            
-            let grade = 'F';
-            let point = 0;
-            const percentage = (obtained / config.fullMarks) * 100;
+  subjectsConfig.forEach((config) => {
+    const inputSubject = inputSubjects.find(
+      (s) => s.subjectName === config.name,
+    );
 
-            // Grading Logic
-            if (percentage >= 80) { grade = 'A+'; point = 5; }
-            else if (percentage >= 70) { grade = 'A'; point = 4; }
-            else if (percentage >= 60) { grade = 'A-'; point = 3.5; }
-            else if (percentage >= 50) { grade = 'B'; point = 3; }
-            else if (percentage >= 40) { grade = 'C'; point = 2; }
-            else if (percentage >= 33) { grade = 'D'; point = 1; }
-            else { failCount++; }
+    // Process marks if provided
+    if (
+      inputSubject &&
+      inputSubject.obtainedMarks !== "" &&
+      inputSubject.obtainedMarks !== null
+    ) {
+      hasAtLeastOneInput = true;
+      let obtained = Number(inputSubject.obtainedMarks);
+      totalObtained += obtained;
 
-            totalPoints += point;
-            tempSubjects.push({
-                subjectName: config.name,
-                fullMarks: config.fullMarks,
-                obtainedMarks: obtained,
-                grade, 
-                point,
-                isAbsent: false
-            });
-        } else {
-            // Mark as Fail/Absent if no marks are entered
-            failCount++;
-            tempSubjects.push({
-                subjectName: config.name,
-                fullMarks: config.fullMarks,
-                obtainedMarks: 0,
-                grade: 'F', 
-                point: 0, 
-                isAbsent: true
-            });
-        }
-    });
+      let grade = "F";
+      let point = 0;
+      const percentage = (obtained / config.fullMarks) * 100;
 
-    // Average Point (GPA) Calculation
-    let gpa = failCount > 0 ? 0 : (totalPoints / subjectsConfig.length).toFixed(2);
-    let status = !hasAtLeastOneInput ? 'Absent' : (failCount === 0 ? 'Pass' : 'Fail');
+      // Grading Logic
+      if (percentage >= 80) {
+        grade = "A+";
+        point = 5;
+      } else if (percentage >= 70) {
+        grade = "A";
+        point = 4;
+      } else if (percentage >= 60) {
+        grade = "A-";
+        point = 3.5;
+      } else if (percentage >= 50) {
+        grade = "B";
+        point = 3;
+      } else if (percentage >= 40) {
+        grade = "C";
+        point = 2;
+      } else if (percentage >= 33) {
+        grade = "D";
+        point = 1;
+      } else {
+        failCount++;
+        point = 0;
+      }
 
-    return {
-        subjects: !hasAtLeastOneInput ? [] : tempSubjects,
-        totalObtainedMarks: totalObtained,
-        gpa: Number(gpa),
-        status
-    };
+      totalPoints += point;
+      tempSubjects.push({
+        subjectName: config.name,
+        fullMarks: config.fullMarks,
+        obtainedMarks: obtained,
+        grade,
+        point,
+        isAbsent: false,
+      });
+    } else {
+      // Mark as Fail/Absent if no marks are entered
+      failCount++;
+      tempSubjects.push({
+        subjectName: config.name,
+        fullMarks: config.fullMarks,
+        obtainedMarks: 0,
+        grade: "F",
+        point: 0,
+        isAbsent: true,
+      });
+    }
+  });
+
+  // Average Point (GPA) Calculation
+  let gpa =
+    failCount > 0 ? 0 : (totalPoints / subjectsConfig.length).toFixed(2);
+  let status = !hasAtLeastOneInput
+    ? "Absent"
+    : failCount === 0
+      ? "Pass"
+      : "Fail";
+
+  return {
+    subjects: !hasAtLeastOneInput ? [] : tempSubjects,
+    totalObtainedMarks: totalObtained,
+    gpa: Number(gpa),
+    status,
+  };
 };
 
-
 exports.addBulkResults = async (req, res) => {
-    try {
-        const { examName, className, academicYear, allResults, subjectsConfig } = req.body;
-        
-        // Map data and trigger calculation for each student
-        const finalData = allResults.map(entry => {
-            const calculated = calculateFinalResult(entry.subjects, subjectsConfig);
-            return {
-                student: entry.studentOid,
-                examName,
-                class: className,
-                academicYear,
-                ...calculated
-            };
-        });
+  try {
+    const { examName, className, academicYear, allResults, subjectsConfig } =
+      req.body;
 
-        await Result.insertMany(finalData);
-        res.status(201).json({ success: true, message: "Bulk results processed successfully" });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+    // Map data and trigger calculation for each student
+    const finalData = allResults.map((entry) => {
+      const calculated = calculateFinalResult(entry.subjects, subjectsConfig);
+      return {
+        student: entry.studentOid,
+        examName,
+        class: className,
+        academicYear,
+        ...calculated,
+      };
+    });
+
+    await Result.insertMany(finalData);
+    res
+      .status(201)
+      .json({ success: true, message: "Bulk results processed successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // Get results with dynamic filtering and sorting
 exports.getResult = async (req, res) => {
-    try {
-        const { className, examName, academicYear, studentId, sortBy } = req.query;
+  try {
+    const { className, examName, academicYear, studentId, sortBy } = req.query;
 
-        // Set search criteria
-        let filter = { class: className, examName, academicYear };
-        
-        // start custom id logic
-        if (studentId) {
-            const studentRecord = await Student.findOne({ studentId: studentId });
-            
-            if (!studentRecord) {
-                return res.status(404).json({ success: false, message: "Student ID not found" });
-            }
-            
-            filter.student = studentRecord._id;
-        }
+    // Set search criteria
+    let filter = { class: className, examName, academicYear };
 
-        // Determine sorting order (Marks, GPA, or Roll)
-        let sortCriteria = {};
-        if (sortBy === 'marks') {
-            sortCriteria = { totalObtainedMarks: -1 }; 
-        } else if (sortBy === 'gpa') {
-            sortCriteria = { gpa: -1 }; 
-        } else {
-            sortCriteria = { 'student.roll': 1 }; 
-        }
+    // start custom id logic
+    if (studentId) {
+      const studentRecord = await Student.findOne({ studentId: studentId });
 
-        // Fetch results and populate student data correctly
-        const results = await Result.find(filter)
-            .populate('student', 'name roll studentId class section') 
-            .sort(sortCriteria);
+      if (!studentRecord) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Student ID not found" });
+      }
 
-        if (!results || results.length === 0) {
-            return res.status(404).json({ success: false, message: "No results found" });
-        }
-
-        // Return object for single student, array for class
-        res.status(200).json({ 
-            success: true, 
-            count: results.length,
-            data: studentId ? results[0] : results 
-        });
-
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+      filter.student = studentRecord._id;
     }
+
+    // Determine sorting order (Marks, GPA, or Roll)
+    let sortCriteria = {};
+    if (sortBy === "marks") {
+      sortCriteria = { totalObtainedMarks: -1 };
+    } else if (sortBy === "gpa") {
+      sortCriteria = { gpa: -1 };
+    } else {
+      sortCriteria = { "student.roll": 1 };
+    }
+
+    // Fetch results and populate student data correctly
+    const results = await Result.find(filter)
+      .populate("student", "name roll studentId class section")
+      .sort(sortCriteria);
+
+    if (!results || results.length === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "No results found" });
+    }
+
+    // Return object for single student, array for class
+    res.status(200).json({
+      success: true,
+      count: results.length,
+      data: studentId ? results[0] : results,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // Update a single student's result
 exports.updateSingleResult = async (req, res) => {
-    try {
-        const { resultId, subjects, subjectsConfig } = req.body;
+  try {
+    const { resultId, subjects, subjectsConfig } = req.body;
 
-        // calculate result
-        const calculated = calculateFinalResult(subjects, subjectsConfig);
+    // calculate result
+    const calculated = calculateFinalResult(subjects, subjectsConfig);
 
-        // Update the document in database
-        const updatedResult = await Result.findByIdAndUpdate(
-            resultId,
-            { 
-                subjects: calculated.subjects,
-                totalObtainedMarks: calculated.totalObtainedMarks,
-                gpa: calculated.gpa,
-                status: calculated.status
-            },
-            { new: true, runValidators: true } 
-        ).populate('student', 'name roll studentId');
+    // Update the document in database
+    const updatedResult = await Result.findByIdAndUpdate(
+      resultId,
+      {
+        subjects: calculated.subjects,
+        totalObtainedMarks: calculated.totalObtainedMarks,
+        gpa: calculated.gpa,
+        status: calculated.status,
+      },
+      { new: true, runValidators: true },
+    ).populate("student", "name roll studentId");
 
-        if (!updatedResult) {
-            return res.status(404).json({ success: false, message: "Result not found" });
-        }
-
-        res.status(200).json({ 
-            success: true, 
-            message: "Result updated successfully", 
-            data: updatedResult 
-        });
-
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+    if (!updatedResult) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Result not found" });
     }
+
+    res.status(200).json({
+      success: true,
+      message: "Result updated successfully",
+      data: updatedResult,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // Update bulk results
 exports.updateBulkResults = async (req, res) => {
-    try {
-        const { examName, className, academicYear, allResults, subjectsConfig } = req.body;
+  try {
+    const { examName, className, academicYear, allResults, subjectsConfig } =
+      req.body;
 
-        const bulkOps = allResults.map(entry => {
+    const bulkOps = allResults.map((entry) => {
+      // calculate results for each student
+      const calculated = calculateFinalResult(entry.subjects, subjectsConfig);
 
-            // calculate results for each student
-            const calculated = calculateFinalResult(entry.subjects, subjectsConfig);
-            
-            return {
-                updateOne: {
-                    filter: { 
-                        student: entry.studentOid, 
-                        examName, 
-                        class: className, 
-                        academicYear 
-                    },
-                    update: { 
-                        $set: { 
-                            ...calculated,
-                            student: entry.studentOid,
-                            examName,
-                            class: className,
-                            academicYear
-                        }
-                    },
-                    upsert: true 
-                }
-            };
-        });
+      return {
+        updateOne: {
+          filter: {
+            student: entry.studentOid,
+            examName,
+            class: className,
+            academicYear,
+          },
+          update: {
+            $set: {
+              ...calculated,
+              student: entry.studentOid,
+              examName,
+              class: className,
+              academicYear,
+            },
+          },
+          upsert: true,
+        },
+      };
+    });
 
-        await Result.bulkWrite(bulkOps);
+    await Result.bulkWrite(bulkOps);
 
-        res.status(200).json({ 
-            success: true, 
-            message: "Class results updated successfully" 
-        });
-
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+    res.status(200).json({
+      success: true,
+      message: "Class results updated successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // Delete all results for a specific class, exam, and academic year
 exports.deleteClassResults = async (req, res) => {
-    try {
-        const { className, examName, academicYear } = req.body;
+  try {
+    const { className, examName, academicYear } = req.body;
 
-        if (!className || !examName || !academicYear) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "Please provide className, examName, and academicYear" 
-            });
-        }
-
-        const result = await Result.deleteMany({
-            class: className,
-            examName: examName,
-            academicYear: academicYear
-        });
-
-        if (result.deletedCount === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: "No results found to delete for this criteria" 
-            });
-        }
-
-        res.status(200).json({ 
-            success: true, 
-            message: `Successfully deleted ${result.deletedCount} results for class ${className}` 
-        });
-
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+    if (!className || !examName || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide className, examName, and academicYear",
+      });
     }
+
+    const result = await Result.deleteMany({
+      class: className,
+      examName: examName,
+      academicYear: academicYear,
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No results found to delete for this criteria",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully deleted ${result.deletedCount} results for class ${className}`,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // downloadPDF result
 exports.downloadPDF = async (req, res) => {
-    try {
-        const { className, examName, academicYear, studentId } = req.query;
-        
-        // Define base filter criteria
-        let filter = { class: className, examName, academicYear };
+  try {
+    const { className, examName, academicYear, studentId } = req.query;
 
-        if (studentId) {
-            const studentRecord = await Student.findOne({ studentId: studentId });
-            if (!studentRecord) return res.status(404).send("Student not found");
-            filter.student = studentRecord._id;
-        }
+    // Define base filter criteria
+    let filter = { class: className, examName, academicYear };
 
-        // Fetch data and populate student details
-        const results = await Result.find(filter).populate('student', 'name roll studentId');
+    if (studentId) {
+      const studentRecord = await Student.findOne({ studentId: studentId });
+      if (!studentRecord) return res.status(404).send("Student not found");
+      filter.student = studentRecord._id;
+    }
 
-        if (!results || results.length === 0) {
-            return res.status(404).send("No data found for the given criteria");
-        }
+    // Fetch data and populate student details
+    const results = await Result.find(filter).populate(
+      "student",
+      "name roll studentId",
+    );
 
-        // Base64 Logo 
-        const logoBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    if (!results || results.length === 0) {
+      return res.status(404).send("No data found for the given criteria");
+    }
 
-        let htmlContent = '';
+    // Base64 Logo
+    const logoBase64 =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
-        // Shared Header for both Individual and Class PDF
-        const headerHtml = `
+    let htmlContent = "";
+
+    // Shared Header for both Individual and Class PDF
+    const headerHtml = `
             <div style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;">
                 <img src="${logoBase64}" alt="School Logo" style="width: 80px; height: 80px; margin-bottom: 10px;">
                 <h1 style="margin: 0; font-size: 24px;">YOUR SCHOOL NAME</h1>
                 <p style="margin: 5px 0;">School Address Line 1, City, Country</p>
-                <h3 style="margin: 10px 0; text-transform: uppercase; color: #555;">${studentId ? 'Academic Marksheet' : 'Class Result Sheet'}</h3>
+                <h3 style="margin: 10px 0; text-transform: uppercase; color: #555;">${studentId ? "Academic Marksheet" : "Class Result Sheet"}</h3>
             </div>
         `;
 
-        if (studentId) {
-            // Logic for Individual Marksheet
-            const r = results[0];
-            htmlContent = `
+    if (studentId) {
+      // Logic for Individual Marksheet
+      const r = results[0];
+      htmlContent = `
                 ${headerHtml}
                 <div style="margin-bottom: 20px; display: flex; justify-content: space-between;">
                     <div>
@@ -310,22 +344,26 @@ exports.downloadPDF = async (req, res) => {
                         <th style="padding:10px;">Subject Name</th>
                         <th style="padding:10px;">Obtained Marks</th>
                     </tr>
-                    ${r.subjects.map(s => `
+                    ${r.subjects
+                      .map(
+                        (s) => `
                         <tr>
                             <td style="padding:10px; border: 1px solid #ddd;">${s.subjectName}</td>
                             <td style="padding:10px; border: 1px solid #ddd;">${s.obtainedMarks}</td>
                         </tr>
-                    `).join('')}
+                    `,
+                      )
+                      .join("")}
                 </table>
                 <div style="margin-top:30px; border-top: 1px solid #eee; pt: 10px;">
                     <p><strong>Total Marks:</strong> ${r.totalObtainedMarks}</p>
-                    <p><strong>GPA:</strong> ${r.gpa || 'N/A'}</p>
-                    <p><strong>Final Status:</strong> <span style="font-weight:bold; color: ${r.status === 'Pass' ? 'green' : 'red'};">${r.status}</span></p>
+                    <p><strong>GPA:</strong> ${r.gpa || "N/A"}</p>
+                    <p><strong>Final Status:</strong> <span style="font-weight:bold; color: ${r.status === "Pass" ? "green" : "red"};">${r.status}</span></p>
                 </div>
             `;
-        } else {
-            // Logic for Class Result Sheet
-            htmlContent = `
+    } else {
+      // Logic for Class Result Sheet
+      htmlContent = `
                 ${headerHtml}
                 <div style="margin-bottom: 10px;">
                     <p><strong>Class:</strong> ${className} | <strong>Exam:</strong> ${examName} | <strong>Year:</strong> ${academicYear}</p>
@@ -341,39 +379,50 @@ exports.downloadPDF = async (req, res) => {
                         </tr>
                     </thead>
                     <tbody>
-                        ${results.map(r => `
+                        ${results
+                          .map(
+                            (r) => `
                             <tr>
                                 <td style="padding:8px; border: 1px solid #ddd;">${r.student.roll}</td>
                                 <td style="padding:8px; border: 1px solid #ddd;">${r.student.name}</td>
                                 <td style="padding:8px; border: 1px solid #ddd;">${r.totalObtainedMarks}</td>
-                                <td style="padding:8px; border: 1px solid #ddd;">${r.gpa || 'N/A'}</td>
-                                <td style="padding:8px; border: 1px solid #ddd; color: ${r.status === 'Pass' ? 'green' : 'red'};">${r.status}</td>
+                                <td style="padding:8px; border: 1px solid #ddd;">${r.gpa || "N/A"}</td>
+                                <td style="padding:8px; border: 1px solid #ddd; color: ${r.status === "Pass" ? "green" : "red"};">${r.status}</td>
                             </tr>
-                        `).join('')}
+                        `,
+                          )
+                          .join("")}
                     </tbody>
                 </table>
             `;
-        }
+    }
 
-        // Signature Footer
-        const footerHtml = `
+    // Signature Footer
+    const footerHtml = `
             <div style="margin-top: 50px; display: flex; justify-content: space-between;">
                 <div style="text-align: center; width: 150px; border-top: 1px solid #000;">Class Teacher</div>
                 <div style="text-align: center; width: 150px; border-top: 1px solid #000;">Headmaster</div>
             </div>
         `;
 
-        // PDF Generation
-        const file = { content: `<html><body style="font-family: 'Helvetica', sans-serif; padding:10px;">${htmlContent}${footerHtml}</body></html>` };
-        const options = { format: 'A4', margin: { top: '40px', bottom: '40px', left: '40px', right: '40px' } };
+    // PDF Generation
+    const file = {
+      content: `<html><body style="font-family: 'Helvetica', sans-serif; padding:10px;">${htmlContent}${footerHtml}</body></html>`,
+    };
+    const options = {
+      format: "A4",
+      margin: { top: "40px", bottom: "40px", left: "40px", right: "40px" },
+    };
 
-        html_to_pdf.generatePdf(file, options).then(pdfBuffer => {
-            res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', `attachment; filename=Result_${examName}.pdf`);
-            res.send(pdfBuffer);
-        });
-
-    } catch (error) {
-        res.status(500).send("Error generating PDF: " + error.message);
-    }
+    html_to_pdf.generatePdf(file, options).then((pdfBuffer) => {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=Result_${examName}.pdf`,
+      );
+      res.send(pdfBuffer);
+    });
+  } catch (error) {
+    res.status(500).send("Error generating PDF: " + error.message);
+  }
 };

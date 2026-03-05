@@ -56,13 +56,14 @@ exports.updateStudent = async (req, res) => {
 
 
 // downloadPDF for student
-
 exports.downloadStudentPDF = async (req, res) => {
     try {
-        const { searchTerm, className } = req.query;
+        const { searchTerm, className, status } = req.query;
         let filter = {};
 
         if (className && className !== "") filter.class = className;
+
+        if (status && status !== "") filter.status = status;
 
         if (searchTerm && searchTerm.trim() !== "") {
             filter.$or = [

@@ -8,6 +8,9 @@ router.post('/add-teacher', teacherController.createTeacher);
 // Get all teachers
 router.get('/all-teachers', teacherController.getAllTeachers);
 
+// download teachers
+router.get('/download-teacher-pdf', teacherController.downloadTeachersPDF);
+
 // Get single teacher details
 router.get('/teacher/:id', teacherController.getTeacherById);
 
