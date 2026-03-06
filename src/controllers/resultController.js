@@ -1,5 +1,6 @@
 const Result = require("../models/Result");
 const Student = require("../models/Student");
+const ExamConfig = require("../models/ExamConfig");
 const html_to_pdf = require("html-pdf-node");
 
 const calculateFinalResult = (inputSubjects, subjectsConfig) => {
@@ -94,22 +95,28 @@ const calculateFinalResult = (inputSubjects, subjectsConfig) => {
 
 exports.addBulkResults = async (req, res) => {
   try {
-    const { examName, className, academicYear, allResults, subjectsConfig } =
-      req.body;
+    const { examId, allResults, subjectsConfig } = req.body;
 
     // Map data and trigger calculation for each student
     const finalData = allResults.map((entry) => {
       const calculated = calculateFinalResult(entry.subjects, subjectsConfig);
       return {
         student: entry.studentOid,
-        examName,
-        class: className,
-        academicYear,
+        exam: examId,
         ...calculated,
       };
     });
 
-    await Result.insertMany(finalData);
+    const bulkOps = finalData.map((data) => ({
+      updateOne: {
+        filter: { student: data.student, exam: data.exam },
+        update: { $set: data },
+        upsert: true,
+      },
+    }));
+
+    await Result.bulkWrite(bulkOps);
+
     res
       .status(201)
       .json({ success: true, message: "Bulk results processed successfully" });
@@ -118,13 +125,13 @@ exports.addBulkResults = async (req, res) => {
   }
 };
 
-// Get results with dynamic filtering and sorting
+// Get results
 exports.getResult = async (req, res) => {
   try {
-    const { className, examName, academicYear, studentId, sortBy } = req.query;
+    const { examId, studentId, sortBy } = req.query;
 
     // Set search criteria
-    let filter = { class: className, examName, academicYear };
+    let filter = { exam: examId };
 
     // start custom id logic
     if (studentId) {
@@ -152,6 +159,7 @@ exports.getResult = async (req, res) => {
     // Fetch results and populate student data correctly
     const results = await Result.find(filter)
       .populate("student", "name roll studentId class section")
+      .populate("exam", "examName className academicYear")
       .sort(sortCriteria);
 
     if (!results || results.length === 0) {
@@ -171,7 +179,7 @@ exports.getResult = async (req, res) => {
   }
 };
 
-// Update a single student's result
+// Update a single student's reesult
 exports.updateSingleResult = async (req, res) => {
   try {
     const { resultId, subjects, subjectsConfig } = req.body;
@@ -287,26 +295,29 @@ exports.deleteClassResults = async (req, res) => {
 // downloadPDF result
 exports.downloadPDF = async (req, res) => {
   try {
-    const { className, examName, academicYear, studentId } = req.query;
+    const { examId, studentId } = req.query;
 
     // Define base filter criteria
-    let filter = { class: className, examName, academicYear };
+    let filter = { exam: examId };
 
     if (studentId) {
-      const studentRecord = await Student.findOne({ studentId: studentId });
+      const studentRecord = await Student.findOne({
+        studentId: studentId,
+      }).select("_id");
       if (!studentRecord) return res.status(404).send("Student not found");
       filter.student = studentRecord._id;
     }
 
     // Fetch data and populate student details
-    const results = await Result.find(filter).populate(
-      "student",
-      "name roll studentId",
-    );
+    const results = await Result.find(filter)
+      .populate("student", "name roll studentId")
+      .populate("exam", "examName className academicYear");
 
     if (!results || results.length === 0) {
       return res.status(404).send("No data found for the given criteria");
     }
+
+    const r = results[0];
 
     // Base64 Logo
     const logoBase64 =
@@ -336,7 +347,7 @@ exports.downloadPDF = async (req, res) => {
                     </div>
                     <div style="text-align: right;">
                         <p><strong>Class:</strong> ${r.class}</p>
-                        <p><strong>Exam:</strong> ${examName}</p>
+                        <p><strong>Exam:</strong> ${r.exam.examName}</p>
                     </div>
                 </div>
                 <table border="1" width="100%" style="border-collapse:collapse; text-align:left;">
@@ -366,7 +377,7 @@ exports.downloadPDF = async (req, res) => {
       htmlContent = `
                 ${headerHtml}
                 <div style="margin-bottom: 10px;">
-                    <p><strong>Class:</strong> ${className} | <strong>Exam:</strong> ${examName} | <strong>Year:</strong> ${academicYear}</p>
+                    <p><strong>Class:</strong> ${r.exam.className} | <strong>Exam:</strong> ${r.exam.examName} | <strong>Year:</strong> ${r.exam.academicYear}</p>
                 </div>
                 <table border="1" width="100%" style="border-collapse:collapse; text-align:left;">
                     <thead>
@@ -418,7 +429,7 @@ exports.downloadPDF = async (req, res) => {
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename=Result_${examName}.pdf`,
+        `attachment; filename=Result_${r.exam.examName}.pdf`,
       );
       res.send(pdfBuffer);
     });
