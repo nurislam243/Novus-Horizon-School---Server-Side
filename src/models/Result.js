@@ -35,11 +35,7 @@ const resultSchema = new mongoose.Schema(
     remarks: {
       type: String,
       trim: true,
-    },
-    isPublished: {
-      type: Boolean,
-      default: false,
-    },
+    }
   },
   { timestamps: true },
 );
