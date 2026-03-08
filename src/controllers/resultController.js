@@ -3,6 +3,7 @@ const Student = require("../models/Student");
 const ExamConfig = require("../models/ExamConfig");
 const html_to_pdf = require("html-pdf-node");
 
+// Calculate Result
 const calculateFinalResult = (inputSubjects, subjectsConfig) => {
   let hasAtLeastOneInput = false;
   let totalObtained = 0;
@@ -93,74 +94,74 @@ const calculateFinalResult = (inputSubjects, subjectsConfig) => {
   };
 };
 
-exports.addBulkResults = async (req, res) => {
+// Get View Result Based On User Search
+exports.getViewResults = async (req, res) => {
   try {
-    const { examId, allResults, subjectsConfig } = req.body;
+    const { academicYear, examName, className, studentId } = req.query;
 
-    // Map data and trigger calculation for each student
-    const finalData = allResults.map((entry) => {
-      const calculated = calculateFinalResult(entry.subjects, subjectsConfig);
-      return {
-        student: entry.studentOid,
-        exam: examId,
-        ...calculated,
-      };
+    const ExamConfig = require("../models/ExamConfig");
+    const exam = await ExamConfig.findOne({
+      examName,
+      className,
+      academicYear,
     });
 
-    const bulkOps = finalData.map((data) => ({
-      updateOne: {
-        filter: { student: data.student, exam: data.exam },
-        update: { $set: data },
-        upsert: true,
-      },
-    }));
+    if (!exam) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Exam configuration not found" });
+    }
 
-    await Result.bulkWrite(bulkOps);
+    let query = { exam: exam._id };
 
-    res
-      .status(201)
-      .json({ success: true, message: "Bulk results processed successfully" });
+    if (studentId) {
+      const Student = require("../models/Student");
+      const targetStudent = await Student.findOne({ studentId: studentId });
+
+      if (!targetStudent) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Student not found" });
+      }
+      query.student = targetStudent._id;
+    }
+
+    const results = await Result.find(query)
+      .populate("student")
+      .populate("exam")
+      .sort({ totalObtainedMarks: -1 });
+
+    if (studentId) {
+      return res.status(200).json({ success: true, data: results[0] || null });
+    } else {
+      return res.status(200).json({ success: true, data: results });
+    }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Get results
-exports.getResult = async (req, res) => {
+// Get Results Data For Edit
+exports.getEditResult = async (req, res) => {
   try {
-    const { examId, studentId, sortBy } = req.query;
+    const { examId, studentId, className } = req.query;
 
-    // Set search criteria
     let filter = { exam: examId };
 
-    // start custom id logic
+    if (className) {
+      filter.class = className;
+    }
+
     if (studentId) {
       const studentRecord = await Student.findOne({ studentId: studentId });
-
-      if (!studentRecord) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Student ID not found" });
-      }
-
+      if (!studentRecord)
+        return res.status(404).json({ message: "Student not found" });
       filter.student = studentRecord._id;
     }
 
-    // Determine sorting order (Marks, GPA, or Roll)
-    let sortCriteria = {};
-    if (sortBy === "marks") {
-      sortCriteria = { totalObtainedMarks: -1 };
-    } else if (sortBy === "gpa") {
-      sortCriteria = { gpa: -1 };
-    } else {
-      sortCriteria = { "student.roll": 1 };
-    }
-
-    // Fetch results and populate student data correctly
     const results = await Result.find(filter)
-      .populate("student", "name roll studentId class section")
-      .populate("exam", "examName className academicYear")
-      .sort(sortCriteria);
+      .populate("student", "name roll studentId")
+      .populate("exam", "examName className academicYear");
 
     if (!results || results.length === 0) {
       return res
@@ -168,7 +169,6 @@ exports.getResult = async (req, res) => {
         .json({ success: false, message: "No results found" });
     }
 
-    // Return object for single student, array for class
     res.status(200).json({
       success: true,
       count: results.length,
@@ -179,67 +179,25 @@ exports.getResult = async (req, res) => {
   }
 };
 
-// Update a single student's reesult
-exports.updateSingleResult = async (req, res) => {
+// Save Bulk Results
+exports.saveBulkResults = async (req, res) => {
   try {
-    const { resultId, subjects, subjectsConfig } = req.body;
-
-    // calculate result
-    const calculated = calculateFinalResult(subjects, subjectsConfig);
-
-    // Update the document in database
-    const updatedResult = await Result.findByIdAndUpdate(
-      resultId,
-      {
-        subjects: calculated.subjects,
-        totalObtainedMarks: calculated.totalObtainedMarks,
-        gpa: calculated.gpa,
-        status: calculated.status,
-      },
-      { new: true, runValidators: true },
-    ).populate("student", "name roll studentId");
-
-    if (!updatedResult) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Result not found" });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Result updated successfully",
-      data: updatedResult,
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// Update bulk results
-exports.updateBulkResults = async (req, res) => {
-  try {
-    const { examName, className, academicYear, allResults, subjectsConfig } =
-      req.body;
+    const { examId, allResults, subjectsConfig } = req.body;
 
     const bulkOps = allResults.map((entry) => {
-      // calculate results for each student
+      // রেজাল্ট ক্যালকুলেট করুন
       const calculated = calculateFinalResult(entry.subjects, subjectsConfig);
 
       return {
         updateOne: {
-          filter: {
-            student: entry.studentOid,
-            examName,
-            class: className,
-            academicYear,
-          },
+          // স্টুডেন্ট এবং এক্সাম আইডি দিয়ে চেক করবে রেকর্ডটি আছে কি না
+          filter: { student: entry.studentOid, exam: examId },
+          // রেকর্ড থাকলে আপডেট হবে, না থাকলে নতুন তৈরি হবে
           update: {
             $set: {
               ...calculated,
               student: entry.studentOid,
-              examName,
-              class: className,
-              academicYear,
+              exam: examId,
             },
           },
           upsert: true,
@@ -251,54 +209,34 @@ exports.updateBulkResults = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Class results updated successfully",
+      message: "Results saved/updated successfully!",
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Delete all results for a specific class, exam, and academic year
-exports.deleteClassResults = async (req, res) => {
-  try {
-    const { className, examName, academicYear } = req.body;
-
-    if (!className || !examName || !academicYear) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide className, examName, and academicYear",
-      });
-    }
-
-    const result = await Result.deleteMany({
-      class: className,
-      examName: examName,
-      academicYear: academicYear,
-    });
-
-    if (result.deletedCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No results found to delete for this criteria",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: `Successfully deleted ${result.deletedCount} results for class ${className}`,
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
 
 // downloadPDF result
 exports.downloadPDF = async (req, res) => {
   try {
-    const { examId, studentId } = req.query;
+    const { examId, studentId, className, examName, academicYear, sortBy } =
+      req.query;
 
-    // Define base filter criteria
-    let filter = { exam: examId };
+    let filter = {};
+
+    if (examId) {
+      filter.exam = examId;
+    } else {
+      const ExamConfig = require("../models/ExamConfig");
+      const exam = await ExamConfig.findOne({
+        examName,
+        className,
+        academicYear,
+      });
+      if (!exam) return res.status(404).send("Exam not found");
+      filter.exam = exam._id;
+    }
 
     if (studentId) {
       const studentRecord = await Student.findOne({
@@ -317,6 +255,29 @@ exports.downloadPDF = async (req, res) => {
       return res.status(404).send("No data found for the given criteria");
     }
 
+    if (!studentId && sortBy) {
+      if (sortBy === "merit") {
+        results.sort((a, b) => {
+          if (a.status === "Pass" && b.status !== "Pass") return -1;
+          if (a.status !== "Pass" && b.status === "Pass") return 1;
+
+          if (b.gpa !== a.gpa) return b.gpa - a.gpa;
+
+          if (b.totalObtainedMarks !== a.totalObtainedMarks) {
+            return b.totalObtainedMarks - a.totalObtainedMarks;
+          }
+
+          return (a.student?.roll || 0) - (b.student?.roll || 0);
+        });
+      }else if (sortBy === "marks") {
+        results.sort((a, b) => b.totalObtainedMarks - a.totalObtainedMarks);
+      } else if (sortBy === "gpa") {
+        results.sort((a, b) => b.gpa - a.gpa);
+      } else if (sortBy === "roll") {
+        results.sort((a, b) => (a.student?.roll || 0) - (b.student?.roll || 0));
+      }
+    }
+
     const r = results[0];
 
     // Base64 Logo
@@ -325,7 +286,6 @@ exports.downloadPDF = async (req, res) => {
 
     let htmlContent = "";
 
-    // Shared Header for both Individual and Class PDF
     const headerHtml = `
             <div style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;">
                 <img src="${logoBase64}" alt="School Logo" style="width: 80px; height: 80px; margin-bottom: 10px;">
@@ -382,6 +342,7 @@ exports.downloadPDF = async (req, res) => {
                 <table border="1" width="100%" style="border-collapse:collapse; text-align:left;">
                     <thead>
                         <tr style="background:#4A90E2; color: white;">
+                            <th style="padding:8px;">Rank</th>
                             <th style="padding:8px;">Roll</th>
                             <th style="padding:8px;">Student Name</th>
                             <th style="padding:8px;">Total Marks</th>
@@ -392,8 +353,9 @@ exports.downloadPDF = async (req, res) => {
                     <tbody>
                         ${results
                           .map(
-                            (r) => `
+                            (r, idx) => `
                             <tr>
+                                <td style="padding:8px; border: 1px solid #ddd; text-align: center;">${idx + 1}</td> 
                                 <td style="padding:8px; border: 1px solid #ddd;">${r.student.roll}</td>
                                 <td style="padding:8px; border: 1px solid #ddd;">${r.student.name}</td>
                                 <td style="padding:8px; border: 1px solid #ddd;">${r.totalObtainedMarks}</td>
