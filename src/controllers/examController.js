@@ -71,7 +71,7 @@ exports.updateExamStatus = async (req, res) => {
     const updatedExam = await ExamConfig.findByIdAndUpdate(
       id,
       { isPublished: isPublished },
-      { new: true }, // আপডেট করার পর নতুন ডাটা রিটার্ন করবে
+      { new: true },
     );
 
     if (!updatedExam) {
@@ -90,16 +90,12 @@ exports.updateExamStatus = async (req, res) => {
 exports.getExamDetails = async (req, res) => {
   try {
     const { examId } = req.params;
-
-    // ১. এক্সাম কনফিগারেশন নিয়ে আসুন
     const examConfig = await ExamConfig.findById(examId);
     
     if (!examConfig) {
       return res.status(404).json({ success: false, message: "Exam not found" });
     }
 
-    // ২. ওই ক্লাসের সব স্টুডেন্ট নিয়ে আসুন
-    // যেহেতু Result টেবিলটি স্টুডেন্টের ওপরে ভিত্তি করে, তাই স্টুডেন্ট লিস্ট জরুরি
     const students = await Student.find({ class: examConfig.className })
                                   .select("name roll studentId class");
 
@@ -116,12 +112,10 @@ exports.getExamDetails = async (req, res) => {
 exports.removeSubject = async (req, res) => {
   try {
     const { examName, className, academicYear, subjectName } = req.body;
-    // এক্সাম কনফিগারেশন থেকে মুছা
     await ExamConfig.updateOne(
       { examName, class: className, academicYear },
       { $pull: { subjectsConfig: { name: subjectName } } },
     );
-    // রেজাল্ট টেবিল থেকেও মুছা
     await Result.updateMany(
       { examName, class: className, academicYear },
       { $pull: { subjects: { subjectName: subjectName } } },
