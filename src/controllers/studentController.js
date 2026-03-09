@@ -54,7 +54,6 @@ exports.updateStudent = async (req, res) => {
     }
 };
 
-
 // downloadPDF for student
 exports.downloadStudentPDF = async (req, res) => {
     try {

@@ -1,6 +1,13 @@
 const mongoose = require('mongoose');
 
 const studentSchema = new mongoose.Schema({
+    // Firebase Uid
+    firebaseUid: { 
+        type: String, 
+        required: true, 
+        unique: true 
+    },
+
     // Basic Information
     name: { 
         type: String, 
