@@ -4,7 +4,24 @@ const html_to_pdf = require("html-pdf-node");
 // Create a new teacher profile
 exports.createTeacher = async (req, res) => {
   try {
-    const teacherData = new Teacher(req.body);
+    const { email, phone, name, image, ...otherData } = req.body;
+
+    const userRecord = await admin.auth().createUser({
+      email: email,
+      password: phone, 
+      displayName: name,
+      photoURL: image,
+    });
+
+    const teacherData = new Teacher({
+      ...otherData,
+      name,
+      phone,
+      email,
+      image,
+      firebaseUid: userRecord.uid,
+    });
+
     const savedTeacher = await teacherData.save();
 
     res.status(201).json({
