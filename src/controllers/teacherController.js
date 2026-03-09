@@ -1,5 +1,14 @@
 const Teacher = require("../models/Teacher");
+const admin = require("firebase-admin");
+const serviceAccount = require("../../serviceAccountKey.json");
 const html_to_pdf = require("html-pdf-node");
+
+// Firebase initialization
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+}
 
 // Create a new teacher profile
 exports.createTeacher = async (req, res) => {

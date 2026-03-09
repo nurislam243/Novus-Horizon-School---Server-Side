@@ -1,13 +1,21 @@
 const Student = require("../models/Student");
 const admin = require("firebase-admin");
+const serviceAccount = require("../../serviceAccountKey.json");
 const html_to_pdf = require("html-pdf-node");
+
+// Firebase initialization
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+}
 
 // Create a new student
 exports.createStudent = async (req, res) => {
   try {
     const { email, name, phone, image } = req.body;
 
-    // creat user in firebase
+    // create user in firebase
     const userRecord = await admin.auth().createUser({
       email: email,
       password: phone,
@@ -23,10 +31,10 @@ exports.createStudent = async (req, res) => {
 
     await student.save();
 
-    res.status(201).json({ 
-        success: true, 
-        message: "Student Added!", 
-        student 
+    res.status(201).json({
+      success: true,
+      message: "Student Added!",
+      student,
     });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });

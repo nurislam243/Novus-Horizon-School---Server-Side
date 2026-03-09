@@ -87,7 +87,6 @@ exports.updateExamStatus = async (req, res) => {
   }
 };
 
-// নতুন কন্ট্রোলার ফাংশন
 exports.getExamDetails = async (req, res) => {
   try {
     const { examId } = req.params;
