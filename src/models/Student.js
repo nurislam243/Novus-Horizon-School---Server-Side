@@ -60,7 +60,7 @@ const studentSchema = new mongoose.Schema({
 
     // Joining Date
     admissionDate: { 
-        type: Date, 
+        type: Date,
         default: Date.now 
     },
 

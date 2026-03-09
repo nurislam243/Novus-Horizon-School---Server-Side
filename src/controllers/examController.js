@@ -1,4 +1,3 @@
-// controllers/examController.js
 const ExamConfig = require("../models/ExamConfig");
 const Result = require("../models/Result");
 const Student = require("../models/Student");
@@ -88,6 +87,33 @@ exports.updateExamStatus = async (req, res) => {
   }
 };
 
+// নতুন কন্ট্রোলার ফাংশন
+exports.getExamDetails = async (req, res) => {
+  try {
+    const { examId } = req.params;
+
+    // ১. এক্সাম কনফিগারেশন নিয়ে আসুন
+    const examConfig = await ExamConfig.findById(examId);
+    
+    if (!examConfig) {
+      return res.status(404).json({ success: false, message: "Exam not found" });
+    }
+
+    // ২. ওই ক্লাসের সব স্টুডেন্ট নিয়ে আসুন
+    // যেহেতু Result টেবিলটি স্টুডেন্টের ওপরে ভিত্তি করে, তাই স্টুডেন্ট লিস্ট জরুরি
+    const students = await Student.find({ class: examConfig.className })
+                                  .select("name roll studentId class");
+
+    res.status(200).json({
+      success: true,
+      exam: examConfig,
+      students: students
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 exports.removeSubject = async (req, res) => {
   try {
     const { examName, className, academicYear, subjectName } = req.body;
@@ -111,30 +137,18 @@ exports.removeSubject = async (req, res) => {
 
 exports.deleteExamConfig = async (req, res) => {
   try {
-    const { id } = req.params; // ExamConfig-এর MongoDB ID
+    const { id } = req.params;
 
-    // প্রথমে কনফিগারেশনটি খুঁজে বের করা
-    const config = await ExamConfig.findById(id);
+    const resultDelete = await Result.deleteMany({ exam: id }); 
+    const deletedConfig = await ExamConfig.findByIdAndDelete(id);
 
-    if (!config) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Exam configuration not found" });
+    if (!deletedConfig) {
+      return res.status(404).json({ success: false, message: "Exam configuration not found" });
     }
-
-    // সংশ্লিষ্ট সকল রেজাল্ট ডিলিট করা (একই ExamName, Class, AcademicYear এর ওপর ভিত্তি করে)
-    await Result.deleteMany({
-      examName: config.examName,
-      class: config.class,
-      academicYear: config.academicYear,
-    });
-
-    // শেষে মেইন কনফিগারেশনটি ডিলিট করা
-    await ExamConfig.findByIdAndDelete(id);
 
     res.status(200).json({
       success: true,
-      message: "Exam and all associated results deleted successfully",
+      message: `Successfully deleted exam and ${resultDelete.deletedCount} associated results.`,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
