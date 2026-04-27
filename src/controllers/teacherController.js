@@ -1,7 +1,7 @@
 const Teacher = require("../models/Teacher");
 const admin = require("firebase-admin");
 const serviceAccount = require("../../serviceAccountKey.json");
-const html_to_pdf = require("html-pdf-node");
+const PDFDocument = require('pdfkit');
 
 // Firebase initialization
 if (!admin.apps.length) {
@@ -140,7 +140,8 @@ exports.deleteTeacher = async (req, res) => {
   }
 };
 
-// downloadPDF for Teacher
+
+// 
 exports.downloadTeachersPDF = async (req, res) => {
   try {
     const { searchTerm } = req.query;
@@ -161,52 +162,83 @@ exports.downloadTeachersPDF = async (req, res) => {
       return res.status(404).json({ message: "No teachers found" });
     }
 
-    const logoBase64 = "data:image/png;base64,...";
+    // ১. PDF ডকুমেন্ট সেটআপ
+    const doc = new PDFDocument({ margin: 40, size: 'A4' });
 
-    let htmlContent = `
-            <html>
-            <body style="font-family: sans-serif; padding:20px;">
-                <div style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;">
-                    <h1 style="margin: 0; font-size: 22px;">INSTITUTION NAME</h1>
-                    <p>Faculty Directory Report</p>
-                    <p style="font-size: 12px; color: #666;">Total Teachers: ${teachers.length}</p>
-                </div>
-                <table border="1" width="100%" style="border-collapse:collapse; font-size: 12px;">
-                    <thead>
-                        <tr style="background:#1f2937; color: white;">
-                            <th style="padding:10px;">Name</th>
-                            <th style="padding:10px;">Email</th>
-                            <th style="padding:10px;">Phone</th>
-                            <th style="padding:10px;">Designation</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${teachers
-                          .map(
-                            (t) => `
-                            <tr>
-                                <td style="padding:8px;">${t.firstName} ${t.lastName}</td>
-                                <td style="padding:8px;">${t.email}</td>
-                                <td style="padding:8px;">${t.phone}</td>
-                                <td style="padding:8px;">${t.designation}</td>
-                            </tr>
-                        `,
-                          )
-                          .join("")}
-                    </tbody>
-                </table>
-            </body>
-            </html>`;
-
-    let options = { format: "A4", margin: { top: "20px", bottom: "20px" } };
-    let file = { content: htmlContent };
-
-    const pdfBuffer = await html_to_pdf.generatePdf(file, options);
-
+    // ২. রেসপন্স হেডারে PDF সেট করা
     res.setHeader("Content-Type", "application/pdf");
-    res.send(pdfBuffer);
+    res.setHeader("Content-Disposition", "attachment; filename=Teacher_List.pdf");
+    doc.pipe(res);
+
+    // ৩. হেডার ডিজাইন (সব পেজেই থাকতে পারে)
+    const generateHeader = (doc) => {
+        doc.fillColor("#1f2937").fontSize(20).text("INSTITUTION NAME", { align: "center", bold: true });
+        doc.fontSize(10).fillColor("#666666").text("Faculty Directory Report", { align: "center" });
+        doc.moveDown();
+        doc.strokeColor("#eeeeee").moveTo(40, doc.y).lineTo(550, doc.y).stroke();
+        doc.moveDown();
+    };
+
+    generateHeader(doc);
+
+    // ৪. টেবিল হেডার ডিজাইন
+    const tableTop = 130;
+    const itemHeight = 25;
+    
+    // টেবিল হেডারের ব্যাকগ্রাউন্ড
+    doc.rect(40, tableTop, 520, itemHeight).fill("#1f2937");
+    
+    doc.fillColor("#ffffff").fontSize(10).font("Helvetica-Bold");
+    doc.text("Name", 50, tableTop + 7);
+    doc.text("Email", 180, tableTop + 7);
+    doc.text("Phone", 350, tableTop + 7);
+    doc.text("Designation", 460, tableTop + 7);
+
+    // ৫. ডাটা রো (Rows) তৈরি করা
+    let y = tableTop + itemHeight;
+    doc.font("Helvetica").fillColor("#333333");
+
+    teachers.forEach((t, index) => {
+        // নতুন পেজ দরকার কি না চেক করা
+        if (y > 750) {
+            doc.addPage();
+            generateHeader(doc);
+            y = 150; // নতুন পেজের জন্য পজিশন
+        }
+
+        // প্রতি অল্টারনেট রো-তে হালকা ব্যাকগ্রাউন্ড (Zebra Stripes)
+        if (index % 2 !== 0) {
+            doc.rect(40, y, 520, itemHeight).fill("#f9fafb");
+        }
+
+        doc.fillColor("#333333");
+        doc.text(`${t.firstName || ''} ${t.lastName || ''}`, 50, y + 7, { width: 120, lineBreak: false });
+        doc.text(t.email || 'N/A', 180, y + 7, { width: 160, lineBreak: false });
+        doc.text(t.phone || 'N/A', 350, y + 7);
+        doc.text(t.designation || 'N/A', 460, y + 7);
+
+        y += itemHeight;
+    });
+
+    // ৬. ফুটার যোগ করা
+    const pageCount = doc.bufferedPageRange().count;
+    for (let i = 0; i < pageCount; i++) {
+        doc.switchToPage(i);
+        doc.fontSize(8).fillColor("#999999").text(
+            `Generated on: ${new Date().toLocaleString()} | Page ${i + 1}`,
+            40,
+            doc.page.height - 50,
+            { align: "center" }
+        );
+    }
+
+    // ৭. শেষ করা
+    doc.end();
+
   } catch (error) {
     console.error("PDF Error:", error);
-    res.status(500).json({ message: "Server Error: " + error.message });
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Server Error: " + error.message });
+    }
   }
 };
