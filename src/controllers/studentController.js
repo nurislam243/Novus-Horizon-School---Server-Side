@@ -1,7 +1,6 @@
 const Student = require("../models/Student");
 const admin = require("firebase-admin");
 const serviceAccount = require("../../serviceAccountKey.json");
-const html_to_pdf = require("html-pdf-node");
 
 // Firebase initialization
 if (!admin.apps.length) {

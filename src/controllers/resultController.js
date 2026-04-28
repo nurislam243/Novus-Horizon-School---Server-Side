@@ -1,7 +1,7 @@
 const Result = require("../models/Result");
 const Student = require("../models/Student");
 const ExamConfig = require("../models/ExamConfig");
-const html_to_pdf = require("html-pdf-node");
+const PDFDocument = require("pdfkit");
 
 // Calculate Result
 const calculateFinalResult = (inputSubjects, subjectsConfig) => {
@@ -216,15 +216,14 @@ exports.saveBulkResults = async (req, res) => {
   }
 };
 
-
 // downloadPDF result
 exports.downloadPDF = async (req, res) => {
   try {
     const { examId, studentId, className, examName, academicYear, sortBy } =
       req.query;
-
     let filter = {};
 
+    // Filtering Logic
     if (examId) {
       filter.exam = examId;
     } else {
@@ -239,37 +238,30 @@ exports.downloadPDF = async (req, res) => {
     }
 
     if (studentId) {
-      const studentRecord = await Student.findOne({
-        studentId: studentId,
-      }).select("_id");
+      const studentRecord = await Student.findOne({ studentId }).select("_id");
       if (!studentRecord) return res.status(404).send("Student not found");
       filter.student = studentRecord._id;
     }
 
-    // Fetch data and populate student details
     const results = await Result.find(filter)
       .populate("student", "name roll studentId")
       .populate("exam", "examName className academicYear");
 
-    if (!results || results.length === 0) {
-      return res.status(404).send("No data found for the given criteria");
-    }
+    if (!results || results.length === 0)
+      return res.status(404).send("No data found");
 
+    // Sorting Logic
     if (!studentId && sortBy) {
       if (sortBy === "merit") {
         results.sort((a, b) => {
           if (a.status === "Pass" && b.status !== "Pass") return -1;
           if (a.status !== "Pass" && b.status === "Pass") return 1;
-
           if (b.gpa !== a.gpa) return b.gpa - a.gpa;
-
-          if (b.totalObtainedMarks !== a.totalObtainedMarks) {
+          if (b.totalObtainedMarks !== a.totalObtainedMarks)
             return b.totalObtainedMarks - a.totalObtainedMarks;
-          }
-
           return (a.student?.roll || 0) - (b.student?.roll || 0);
         });
-      }else if (sortBy === "marks") {
+      } else if (sortBy === "marks") {
         results.sort((a, b) => b.totalObtainedMarks - a.totalObtainedMarks);
       } else if (sortBy === "gpa") {
         results.sort((a, b) => b.gpa - a.gpa);
@@ -278,124 +270,152 @@ exports.downloadPDF = async (req, res) => {
       }
     }
 
-    const r = results[0];
+    const firstResult = results[0];
 
-    // Base64 Logo
-    const logoBase64 =
-      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=Result_${firstResult.exam.examName}.pdf`,
+    );
+    doc.pipe(res);
 
-    let htmlContent = "";
+    // Header Function
+    const drawHeader = () => {
+      doc
+        .fillColor("#1f2937")
+        .fontSize(20)
+        .text("YOUR SCHOOL NAME", { align: "center", bold: true });
+      doc
+        .fontSize(10)
+        .fillColor("#666")
+        .text("School Address Line 1, City, Country", { align: "center" });
+      doc.moveDown(0.5);
+      doc
+        .fontSize(12)
+        .fillColor("#333")
+        .text(studentId ? "ACADEMIC MARKSHEET" : "CLASS RESULT SHEET", {
+          align: "center",
+          underline: true,
+        });
+      doc.moveDown();
+      doc.strokeColor("#333").moveTo(40, doc.y).lineTo(550, doc.y).stroke();
+      doc.moveDown();
+    };
 
-    const headerHtml = `
-            <div style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;">
-                <img src="${logoBase64}" alt="School Logo" style="width: 80px; height: 80px; margin-bottom: 10px;">
-                <h1 style="margin: 0; font-size: 24px;">YOUR SCHOOL NAME</h1>
-                <p style="margin: 5px 0;">School Address Line 1, City, Country</p>
-                <h3 style="margin: 10px 0; text-transform: uppercase; color: #555;">${studentId ? "Academic Marksheet" : "Class Result Sheet"}</h3>
-            </div>
-        `;
+    drawHeader();
 
     if (studentId) {
-      // Logic for Individual Marksheet
       const r = results[0];
-      htmlContent = `
-                ${headerHtml}
-                <div style="margin-bottom: 20px; display: flex; justify-content: space-between;">
-                    <div>
-                        <p><strong>Student Name:</strong> ${r.student.name}</p>
-                        <p><strong>Roll Number:</strong> ${r.student.roll}</p>
-                    </div>
-                    <div style="text-align: right;">
-                        <p><strong>Class:</strong> ${r.class}</p>
-                        <p><strong>Exam:</strong> ${r.exam.examName}</p>
-                    </div>
-                </div>
-                <table border="1" width="100%" style="border-collapse:collapse; text-align:left;">
-                    <tr style="background:#4A90E2; color: white;">
-                        <th style="padding:10px;">Subject Name</th>
-                        <th style="padding:10px;">Obtained Marks</th>
-                    </tr>
-                    ${r.subjects
-                      .map(
-                        (s) => `
-                        <tr>
-                            <td style="padding:10px; border: 1px solid #ddd;">${s.subjectName}</td>
-                            <td style="padding:10px; border: 1px solid #ddd;">${s.obtainedMarks}</td>
-                        </tr>
-                    `,
-                      )
-                      .join("")}
-                </table>
-                <div style="margin-top:30px; border-top: 1px solid #eee; pt: 10px;">
-                    <p><strong>Total Marks:</strong> ${r.totalObtainedMarks}</p>
-                    <p><strong>GPA:</strong> ${r.gpa || "N/A"}</p>
-                    <p><strong>Final Status:</strong> <span style="font-weight:bold; color: ${r.status === "Pass" ? "green" : "red"};">${r.status}</span></p>
-                </div>
-            `;
+      doc.fontSize(11).fillColor("#000");
+      doc.text(`Student Name: ${r.student.name}`, 40, doc.y);
+      doc.text(`Class: ${r.class}`, 400, doc.y - 12);
+      doc.text(`Roll Number: ${r.student.roll}`, 40, doc.y + 5);
+      doc.text(`Exam: ${r.exam.examName}`, 400, doc.y - 12);
+      doc.moveDown(2);
+
+      // Subject Table Header
+      let currentY = doc.y;
+      doc.rect(40, currentY, 520, 25).fill("#4A90E2");
+      doc.fillColor("#fff").text("Subject Name", 50, currentY + 7);
+      doc.text("Obtained Marks", 400, currentY + 7);
+
+      currentY += 25;
+      doc.fillColor("#000");
+      r.subjects.forEach((s) => {
+        doc.rect(40, currentY, 520, 25).strokeColor("#ddd").stroke();
+        doc.text(s.subjectName, 50, currentY + 7);
+        doc.text(s.obtainedMarks.toString(), 400, currentY + 7);
+        currentY += 25;
+      });
+
+      doc.moveDown();
+      doc
+        .fontSize(12)
+        .font("Helvetica-Bold")
+        .text(`Total Marks: ${r.totalObtainedMarks}`);
+      doc.text(`GPA: ${r.gpa || "N/A"}`);
+      doc
+        .fillColor(r.status === "Pass" ? "green" : "red")
+        .text(`Final Status: ${r.status}`);
     } else {
-      // Logic for Class Result Sheet
-      htmlContent = `
-                ${headerHtml}
-                <div style="margin-bottom: 10px;">
-                    <p><strong>Class:</strong> ${r.exam.className} | <strong>Exam:</strong> ${r.exam.examName} | <strong>Year:</strong> ${r.exam.academicYear}</p>
-                </div>
-                <table border="1" width="100%" style="border-collapse:collapse; text-align:left;">
-                    <thead>
-                        <tr style="background:#4A90E2; color: white;">
-                            <th style="padding:8px;">Rank</th>
-                            <th style="padding:8px;">Roll</th>
-                            <th style="padding:8px;">Student Name</th>
-                            <th style="padding:8px;">Total Marks</th>
-                            <th style="padding:8px;">GPA</th>
-                            <th style="padding:8px;">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${results
-                          .map(
-                            (r, idx) => `
-                            <tr>
-                                <td style="padding:8px; border: 1px solid #ddd; text-align: center;">${idx + 1}</td> 
-                                <td style="padding:8px; border: 1px solid #ddd;">${r.student.roll}</td>
-                                <td style="padding:8px; border: 1px solid #ddd;">${r.student.name}</td>
-                                <td style="padding:8px; border: 1px solid #ddd;">${r.totalObtainedMarks}</td>
-                                <td style="padding:8px; border: 1px solid #ddd;">${r.gpa || "N/A"}</td>
-                                <td style="padding:8px; border: 1px solid #ddd; color: ${r.status === "Pass" ? "green" : "red"};">${r.status}</td>
-                            </tr>
-                        `,
-                          )
-                          .join("")}
-                    </tbody>
-                </table>
-            `;
+      // Class Result Sheet
+      doc
+        .fontSize(10)
+        .text(
+          `Class: ${firstResult.exam.className} | Exam: ${firstResult.exam.examName} | Year: ${firstResult.exam.academicYear}`,
+          { align: "left" },
+        );
+      doc.moveDown();
+
+      let currentY = doc.y;
+      const tableHeaders = [
+        "Rank",
+        "Roll",
+        "Student Name",
+        "Marks",
+        "GPA",
+        "Status",
+      ];
+      const colWidths = [40, 50, 180, 80, 80, 90];
+      const startX = 40;
+
+      // Table Header
+      doc.rect(startX, currentY, 520, 25).fill("#4A90E2");
+      doc.fillColor("#fff").font("Helvetica-Bold");
+      let tempX = startX;
+      tableHeaders.forEach((h, i) => {
+        doc.text(h, tempX + 5, currentY + 7);
+        tempX += colWidths[i];
+      });
+
+      currentY += 25;
+      doc.fillColor("#000").font("Helvetica");
+
+      results.forEach((r, idx) => {
+        if (currentY > 750) {
+          doc.addPage();
+          drawHeader();
+          currentY = 150;
+        }
+
+        if (idx % 2 !== 0) doc.rect(startX, currentY, 520, 25).fill("#f9f9f9");
+
+        doc.fillColor("#333");
+        let rowX = startX;
+        doc.text((idx + 1).toString(), rowX + 5, currentY + 7);
+        rowX += colWidths[0];
+        doc.text(r.student.roll.toString(), rowX + 5, currentY + 7);
+        rowX += colWidths[1];
+        doc.text(r.student.name, rowX + 5, currentY + 7);
+        rowX += colWidths[2];
+        doc.text(r.totalObtainedMarks.toString(), rowX + 5, currentY + 7);
+        rowX += colWidths[3];
+        doc.text(r.gpa?.toString() || "N/A", rowX + 5, currentY + 7);
+        rowX += colWidths[4];
+
+        const statusColor = r.status === "Pass" ? "green" : "red";
+        doc.fillColor(statusColor).text(r.status, rowX + 5, currentY + 7);
+
+        currentY += 25;
+      });
     }
 
     // Signature Footer
-    const footerHtml = `
-            <div style="margin-top: 50px; display: flex; justify-content: space-between;">
-                <div style="text-align: center; width: 150px; border-top: 1px solid #000;">Class Teacher</div>
-                <div style="text-align: center; width: 150px; border-top: 1px solid #000;">Headmaster</div>
-            </div>
-        `;
+    const footerY = doc.page.height - 100;
+    doc.strokeColor("#000").moveTo(40, footerY).lineTo(160, footerY).stroke();
+    doc.strokeColor("#000").moveTo(430, footerY).lineTo(550, footerY).stroke();
+    doc
+      .fontSize(10)
+      .fillColor("#000")
+      .text("Class Teacher", 40, footerY + 5, { width: 120, align: "center" });
+    doc.text("Headmaster", 430, footerY + 5, { width: 120, align: "center" });
 
-    // PDF Generation
-    const file = {
-      content: `<html><body style="font-family: 'Helvetica', sans-serif; padding:10px;">${htmlContent}${footerHtml}</body></html>`,
-    };
-    const options = {
-      format: "A4",
-      margin: { top: "40px", bottom: "40px", left: "40px", right: "40px" },
-    };
-
-    html_to_pdf.generatePdf(file, options).then((pdfBuffer) => {
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename=Result_${r.exam.examName}.pdf`,
-      );
-      res.send(pdfBuffer);
-    });
+    doc.end();
   } catch (error) {
-    res.status(500).send("Error generating PDF: " + error.message);
+    console.error("PDF Error:", error);
+    if (!res.headersSent) {
+      res.status(500).send("Error generating PDF: " + error.message);
+    }
   }
 };
